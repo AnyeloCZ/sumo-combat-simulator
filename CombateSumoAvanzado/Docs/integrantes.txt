@@ -1,0 +1,7 @@
+Integrantes del grupo - Taller No 3 (Concurrencia - Sumo)
+Universidad Distrital Francisco José de Caldas
+Ingeniería de Sistemas - Programación Avanzada
+
+Sebastian Zambrano  - 20251020102
+Anyelo Casas        - 20251020106
+Diego Yañes         - 20251020103

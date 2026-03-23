@@ -7,7 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 /**
- * Controlador de vista del servidor de sumo.
+ * Controlador de vista del servidor del parcial.
  * Crea su propia VentanaServidor internamente.
  * Implementa ActionListener e IEventosCombate directamente.
  *
@@ -16,16 +16,14 @@ import java.awt.event.ActionListener;
  */
 public class ControlVista implements ActionListener, IEventosCombate {
 
-    /** Ventana del servidor creada internamente. */
+    /** Ventana del servidor. */
     private VentanaServidor ventana;
-
-    /** Referencia al controlador general para iniciar el combate. */
+    /** Controlador general. */
     private ControlGeneral controlGeneral;
 
     /**
-     * Constructor que recibe el ControlGeneral, crea la ventana y registra listeners.
-     *
-     * @param controlGeneral Controlador principal del servidor.
+     * Constructor que crea la ventana y registra listeners.
+     * @param controlGeneral Controlador principal.
      */
     public ControlVista(ControlGeneral controlGeneral) {
         this.controlGeneral = controlGeneral;
@@ -41,7 +39,7 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
-     * Registra este controlador como ActionListener de los botones de la ventana.
+     * Registra este controlador como listener de los botones.
      */
     private void registrarListeners() {
         ventana.getBtnIniciar().addActionListener(this);
@@ -49,9 +47,8 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
-     * Despacha los eventos segun la fuente del boton.
-     *
-     * @param e Evento de accion recibido.
+     * Despacha eventos segun la fuente del boton.
+     * @param e Evento de accion.
      */
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -62,24 +59,19 @@ public class ControlVista implements ActionListener, IEventosCombate {
         }
     }
 
-    // ======================== PERFORMED ========================
-
     /**
-     * Inicia el servidor con el puerto ingresado por el usuario.
-     * El boton se deshabilita para que no se pueda iniciar dos veces.
-     *
+     * Inicia el servidor con el puerto ingresado.
      * @param e Evento de accion.
      */
     private void performedIniciar(ActionEvent e) {
         int puerto = validarPuerto();
         if (puerto == -1) return;
         ventana.getBtnIniciar().setEnabled(false);
-        controlGeneral.iniciarCombate(puerto);
+        controlGeneral.iniciarServidor(puerto);
     }
 
     /**
      * Limpia el log del servidor.
-     *
      * @param e Evento de accion.
      */
     private void performedLimpiar(ActionEvent e) {
@@ -88,31 +80,24 @@ public class ControlVista implements ActionListener, IEventosCombate {
 
     /**
      * Valida el puerto ingresado por el usuario.
-     *
-     * @return Puerto valido como entero, o -1 si es invalido.
+     * @return Puerto valido o -1 si es invalido.
      */
     private int validarPuerto() {
-        String puertoStr = ventana.getPuerto().trim();
         try {
-            int puerto = Integer.parseInt(puertoStr);
-            if (puerto <= 0 || puerto > 65535) throw new NumberFormatException();
-            return puerto;
+            int p = Integer.parseInt(ventana.getPuerto().trim());
+            if (p <= 0 || p > 65535) throw new NumberFormatException();
+            return p;
         } catch (NumberFormatException ex) {
             ventana.agregarLog("Puerto invalido. Debe ser un numero entre 1 y 65535.");
             return -1;
         }
     }
 
-    // ======================== EVENTOS DEL COMBATE ========================
-
     /** {@inheritDoc} */
     @Override
     public void onLuchadorLlego(String nombre, double peso) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.mostrarLlegada(nombre, peso);
-            }
+            @Override public void run() { ventana.mostrarLlegada(nombre, peso); }
         });
     }
 
@@ -120,10 +105,7 @@ public class ControlVista implements ActionListener, IEventosCombate {
     @Override
     public void onCombateIniciado(String nombre1, String nombre2) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.mostrarCombateIniciado(nombre1, nombre2);
-            }
+            @Override public void run() { ventana.mostrarCombateIniciado(nombre1, nombre2); }
         });
     }
 
@@ -131,10 +113,7 @@ public class ControlVista implements ActionListener, IEventosCombate {
     @Override
     public void onTurnoEjecutado(String atacante, String kimarite) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.mostrarTurno(atacante, kimarite);
-            }
+            @Override public void run() { ventana.mostrarTurno(atacante, kimarite); }
         });
     }
 
@@ -142,10 +121,7 @@ public class ControlVista implements ActionListener, IEventosCombate {
     @Override
     public void onCombateTerminado(String ganador, double peso, int victorias) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.mostrarGanador(ganador, peso, victorias);
-            }
+            @Override public void run() { ventana.mostrarGanador(ganador, peso, victorias); }
         });
     }
 
@@ -153,33 +129,23 @@ public class ControlVista implements ActionListener, IEventosCombate {
     @Override
     public void onError(String mensaje) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.mostrarError(mensaje);
-            }
+            @Override public void run() { ventana.mostrarError(mensaje); }
         });
     }
 
     /**
-     * Muestra un mensaje general en el log de la ventana.
-     *
+     * Muestra un mensaje en el log.
      * @param mensaje Texto a mostrar.
      */
     public void mostrarMensaje(String mensaje) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                ventana.agregarLog(mensaje);
-            }
+            @Override public void run() { ventana.agregarLog(mensaje); }
         });
     }
 
     /**
-     * Retorna este controlador como listener de eventos del combate.
-     *
-     * @return Esta instancia que implementa IEventosCombate.
+     * Retorna este controlador como listener de eventos.
+     * @return Esta instancia.
      */
-    public IEventosCombate getListener() {
-        return this;
-    }
+    public IEventosCombate getListener() { return this; }
 }

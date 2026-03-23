@@ -1,0 +1,22 @@
+=== CONFIGURACION DE LA BASE DE DATOS ===
+Proyecto: Primer Parcial - Combate de Sumo
+Autor: Sebastian Zambrano, Anyelo Casas, Diego Yanes
+
+Base de datos: sumo_db
+Motor: MySQL 8.x
+Herramienta recomendada: MySQL Workbench 8.x
+
+PASOS PARA CONFIGURAR:
+1. Instalar MySQL 8.x y MySQL Workbench
+2. Abrir MySQL Workbench y conectarse al servidor local
+3. Abrir y ejecutar el archivo: Data/script_bd.sql
+4. Verificar que se creo la BD sumo_db con la tabla rikishi
+5. Editar Data/config.properties con sus credenciales:
+   db.url=jdbc:mysql://localhost:3306/sumo_db
+   db.usuario=root
+   db.contrasena=SU_CONTRASENA
+6. Colocar el archivo mysql-connector-java.jar en la carpeta lib/
+   y agregarlo al classpath del proyecto en NetBeans
+
+LIBRERIA REQUERIDA:
+- mysql-connector-java-8.x.x.jar (incluida en lib/)

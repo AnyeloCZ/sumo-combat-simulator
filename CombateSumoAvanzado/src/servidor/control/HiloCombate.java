@@ -5,73 +5,63 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 /**
- * Hilo que gestiona la aceptacion de conexiones y el ciclo del combate.
- * Espera exactamente dos conexiones, ejecuta el combate y al finalizar
- * espera que ambos clientes confirmen el cierre antes de terminar el servidor.
+ * Hilo que acepta conexiones de clientes continuamente
+ * hasta que haya suficientes luchadores registrados.
+ * Genera un HiloRikishi por cada cliente conectado.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class HiloCombate extends Thread {
 
-    /** Puerto en el que escuchara el servidor. */
+    /** Puerto del servidor. */
     private int puerto;
-
-    /** Controlador del dohyo con la logica del combate. */
-    private ControlDohyo controlDohyo;
-
-    /** Controlador de vista para notificar eventos. */
+    /** Controlador de BD. */
+    private ControlBD controlBD;
+    /** Controlador de vista. */
     private ControlVista controlVista;
+    /** Controlador general. */
+    private ControlGeneral controlGeneral;
 
     /**
-     * Constructor del hilo de combate.
-     *
-     * @param puerto       Puerto del servidor.
-     * @param controlDohyo Controlador del dohyo.
-     * @param controlVista Controlador de vista para notificar eventos.
+     * Constructor del hilo de aceptacion de conexiones.
+     * @param puerto         Puerto del servidor.
+     * @param controlBD      Controlador de BD.
+     * @param controlVista   Controlador de vista.
+     * @param controlGeneral Controlador principal.
      */
-    public HiloCombate(int puerto, ControlDohyo controlDohyo, ControlVista controlVista) {
-        this.puerto       = puerto;
-        this.controlDohyo = controlDohyo;
-        this.controlVista = controlVista;
+    public HiloCombate(int puerto, ControlBD controlBD,
+                        ControlVista controlVista, ControlGeneral controlGeneral) {
+        this.puerto         = puerto;
+        this.controlBD      = controlBD;
+        this.controlVista   = controlVista;
+        this.controlGeneral = controlGeneral;
     }
 
     /**
-     * Acepta exactamente dos conexiones, lanza los HiloRikishi,
-     * espera que el combate termine y que ambos clientes confirmen cierre.
-     * Al finalizar, el servidor muestra el resultado y termina su ejecucion.
+     * Acepta conexiones de clientes generando un HiloRikishi por cada uno.
+     * El servidor sigue aceptando hasta que ControlGeneral detenga el ServerSocket.
      */
     @Override
     public void run() {
         try {
             ServerSocket serverSocket = new ServerSocket(puerto);
+            controlGeneral.setServerSocket(serverSocket);
             controlVista.mostrarMensaje("Servidor escuchando en puerto " + puerto + "...");
 
             IEventosCombate listener = controlVista.getListener();
 
-            Socket socket1 = serverSocket.accept();
-            controlVista.mostrarMensaje("Luchador 1 conectado.");
-            HiloRikishi hilo1 = new HiloRikishi(socket1, controlDohyo, listener);
+            while (!serverSocket.isClosed()) {
+                Socket socket = serverSocket.accept();
+                controlVista.mostrarMensaje("Nuevo cliente conectado.");
+                HiloRikishi hilo = new HiloRikishi(socket, controlBD, listener, controlGeneral);
+                hilo.start();
+            }
 
-            Socket socket2 = serverSocket.accept();
-            controlVista.mostrarMensaje("Luchador 2 conectado.");
-            HiloRikishi hilo2 = new HiloRikishi(socket2, controlDohyo, listener);
-
-            // Cerrar inmediatamente: no se aceptan mas conexiones
-            serverSocket.close();
-
-            hilo1.start();
-            hilo2.start();
-
-            // Esperar a que ambos hilos terminen
-            // (cada hilo espera confirmacion de cierre del cliente antes de morir)
-            hilo1.join();
-            hilo2.join();
-
-            controlVista.mostrarMensaje("Ambos clientes han cerrado. Servidor finalizado.");
-
-        } catch (IOException | InterruptedException e) {
-            controlVista.mostrarMensaje("Error del servidor: " + e.getMessage());
+        } catch (IOException e) {
+            if (!e.getMessage().contains("closed")) {
+                controlVista.mostrarMensaje("Error del servidor: " + e.getMessage());
+            }
         }
     }
 }

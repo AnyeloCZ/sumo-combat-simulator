@@ -4,35 +4,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Clase que representa un luchador de sumo (Rikishi) en el servidor.
- * Los kimarites se almacenan directamente como Strings.
+ * Entidad que representa un luchador de sumo en el servidor.
+ * Incluye id de BD, campo participo para control de combates
+ * y kimarites como lista de Strings.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class Rikishi {
 
+    /** Identificador unico en la base de datos. */
+    private int id;
     /** Nombre del luchador. */
     private String nombre;
-
-    /** Peso del luchador en kg. */
+    /** Peso en kg. */
     private double peso;
-
-    /** Numero de combates ganados. */
+    /** Victorias acumuladas. */
     private int victorias;
-
-    /** Lista de kimarites (nombres de tecnicas) del luchador. */
+    /** Tecnicas del luchador. */
     private List<String> kimarites;
-
-    /** Referencia al luchador rival asignado. */
+    /** Rival asignado en el combate actual. */
     private Rikishi rival;
-
-    /** Estado: true si esta dentro del dohyo, false si fue sacado. */
+    /** true si sigue dentro del dohyo. */
     private boolean enDohyo;
+    /** true si ya participo en algun combate. */
+    private boolean participo;
 
     /**
-     * Constructor que inicializa un Rikishi con nombre y peso.
-     *
+     * Constructor basico con nombre y peso.
      * @param nombre Nombre del luchador.
      * @param peso   Peso en kg.
      */
@@ -42,76 +41,62 @@ public class Rikishi {
         this.victorias = 0;
         this.kimarites = new ArrayList<>();
         this.enDohyo   = true;
+        this.participo = false;
     }
 
     /**
-     * Incrementa en uno el contador de victorias.
+     * Constructor completo para instancias recuperadas de la BD.
+     * @param id        ID de la BD.
+     * @param nombre    Nombre.
+     * @param peso      Peso en kg.
+     * @param victorias Victorias acumuladas.
+     * @param kimarites Lista de tecnicas.
+     * @param participo true si ya participo.
      */
+    public Rikishi(int id, String nombre, double peso, int victorias,
+                   List<String> kimarites, boolean participo) {
+        this.id        = id;
+        this.nombre    = nombre;
+        this.peso      = peso;
+        this.victorias = victorias;
+        this.kimarites = kimarites;
+        this.enDohyo   = true;
+        this.participo = participo;
+    }
+
+    /** Incrementa en uno las victorias. */
     public void incrementarVictorias() { this.victorias++; }
 
-    /**
-     * Obtiene el nombre del luchador.
-     * @return Nombre.
-     */
+    /** @return id de la BD. */
+    public int getId() { return id; }
+    /** @param id nuevo id. */
+    public void setId(int id) { this.id = id; }
+    /** @return nombre. */
     public String getNombre() { return nombre; }
-
-    /**
-     * Establece el nombre del luchador.
-     * @param nombre Nuevo nombre.
-     */
+    /** @param nombre nuevo nombre. */
     public void setNombre(String nombre) { this.nombre = nombre; }
-
-    /**
-     * Obtiene el peso del luchador.
-     * @return Peso en kg.
-     */
+    /** @return peso en kg. */
     public double getPeso() { return peso; }
-
-    /**
-     * Establece el peso del luchador.
-     * @param peso Nuevo peso.
-     */
+    /** @param peso nuevo peso. */
     public void setPeso(double peso) { this.peso = peso; }
-
-    /**
-     * Obtiene el numero de victorias.
-     * @return Victorias acumuladas.
-     */
+    /** @return victorias. */
     public int getVictorias() { return victorias; }
-
-    /**
-     * Obtiene la lista de kimarites.
-     * @return Lista de nombres de tecnicas.
-     */
+    /** @param victorias nuevo valor. */
+    public void setVictorias(int victorias) { this.victorias = victorias; }
+    /** @return lista de kimarites. */
     public List<String> getKimarites() { return kimarites; }
-
-    /**
-     * Establece la lista de kimarites.
-     * @param kimarites Lista de nombres de tecnicas.
-     */
+    /** @param kimarites nueva lista. */
     public void setKimarites(List<String> kimarites) { this.kimarites = kimarites; }
-
-    /**
-     * Obtiene el rival asignado.
-     * @return Rikishi rival.
-     */
+    /** @return rival. */
     public Rikishi getRival() { return rival; }
-
-    /**
-     * Asigna el rival del luchador.
-     * @param rival Rikishi contrincante.
-     */
+    /** @param rival contrincante. */
     public void setRival(Rikishi rival) { this.rival = rival; }
-
-    /**
-     * Indica si el luchador esta dentro del dohyo.
-     * @return true si esta dentro.
-     */
+    /** @return true si esta en dohyo. */
     public boolean isEnDohyo() { return enDohyo; }
-
-    /**
-     * Establece el estado del luchador dentro del dohyo.
-     * @param enDohyo true si esta dentro.
-     */
+    /** @param enDohyo estado en dohyo. */
     public void setEnDohyo(boolean enDohyo) { this.enDohyo = enDohyo; }
+    /** @return true si ya participo. */
+    public boolean isParticipo() { return participo; }
+    /** @param participo estado de participacion. */
+    public void setParticipo(boolean participo) { this.participo = participo; }
 }

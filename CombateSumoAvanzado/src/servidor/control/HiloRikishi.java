@@ -10,48 +10,48 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Hilo de control que atiende a un cliente (luchador) conectado por socket.
- * Recibe datos, registra el rikishi en ControlDohyo, ejecuta turnos y notifica resultado.
- * Solo conoce a ControlDohyo, nunca al modelo Dohyo directamente.
+ * Hilo que atiende a un cliente conectado por socket.
+ * Recibe datos, los registra en BD via ControlBD y queda
+ * esperando la notificacion del resultado del combate.
+ * Solo conoce a ControlBD y al listener de eventos.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class HiloRikishi extends Thread {
 
-    /** Socket de conexion con el cliente. */
+    /** Socket del cliente. */
     private Socket socket;
-
-    /** Controlador del dohyo con la logica del combate. */
-    private ControlDohyo controlDohyo;
-
-    /** Rikishi construido a partir de los datos recibidos. */
-    private Rikishi rikishi;
-
-    /** Flujo de entrada desde el cliente. */
+    /** Controlador de BD. */
+    private ControlBD controlBD;
+    /** Flujo de entrada. */
     private DataInputStream entrada;
-
-    /** Flujo de salida hacia el cliente. */
+    /** Flujo de salida. */
     private DataOutputStream salida;
-
-    /** Listener que notifica eventos a la vista del servidor. */
+    /** Listener de eventos para la vista. */
     private IEventosCombate listener;
+    /** Nombre del luchador recibido. */
+    private String nombre;
+    /** Controlador general para notificar registro. */
+    private ControlGeneral controlGeneral;
 
     /**
-     * Constructor que inicializa el hilo.
-     *
-     * @param socket       Socket del cliente conectado.
-     * @param controlDohyo Controlador del dohyo.
-     * @param listener     Listener para notificar eventos a la vista.
+     * Constructor del hilo.
+     * @param socket         Socket del cliente.
+     * @param controlBD      Controlador de BD.
+     * @param listener       Listener de eventos.
+     * @param controlGeneral Controlador principal para notificar registro.
      */
-    public HiloRikishi(Socket socket, ControlDohyo controlDohyo, IEventosCombate listener) {
-        this.socket       = socket;
-        this.controlDohyo = controlDohyo;
-        this.listener     = listener;
+    public HiloRikishi(Socket socket, ControlBD controlBD,
+                        IEventosCombate listener, ControlGeneral controlGeneral) {
+        this.socket         = socket;
+        this.controlBD      = controlBD;
+        this.listener       = listener;
+        this.controlGeneral = controlGeneral;
     }
 
     /**
-     * Metodo principal del hilo. Recibe datos, registra, ejecuta turnos y notifica resultado.
+     * Recibe datos del cliente, registra en BD y espera resultado.
      */
     @Override
     public void run() {
@@ -59,85 +59,48 @@ public class HiloRikishi extends Thread {
             entrada = new DataInputStream(socket.getInputStream());
             salida  = new DataOutputStream(socket.getOutputStream());
 
-            recibirDatos();
+            // Recibir datos del luchador
+            String linea    = entrada.readUTF();
+            String[] partes = linea.split("\\|");
+            nombre          = partes[0];
+            double peso     = Double.parseDouble(partes[1]);
 
-            controlDohyo.registrarRikishi(rikishi);
-            listener.onLuchadorLlego(rikishi.getNombre(), rikishi.getPeso());
-
-            controlDohyo.esperarRival();
-            listener.onCombateIniciado(
-                controlDohyo.getRikishi1().getNombre(),
-                controlDohyo.getRikishi2().getNombre()
-            );
-
-            while (!controlDohyo.isCombateTerminado()) {
-                controlDohyo.ejecutarTurno(rikishi);
-                if (!controlDohyo.isCombateTerminado()) {
-                    listener.onTurnoEjecutado(
-                        controlDohyo.getUltimoAtacante(),
-                        controlDohyo.getUltimaKimarite()
-                    );
+            List<String> kimarites = new ArrayList<>();
+            if (partes.length > 2) {
+                for (String k : partes[2].split(",")) {
+                    if (!k.trim().isEmpty()) kimarites.add(k.trim());
                 }
             }
 
-            Rikishi ganador = controlDohyo.getGanador();
-            boolean gane    = ganador.getNombre().equals(rikishi.getNombre());
-            notificarResultado(gane ? "GANASTE" : "PERDISTE");
+            // Registrar en BD
+            controlBD.registrarLuchador(nombre, peso, kimarites);
+            listener.onLuchadorLlego(nombre, peso);
 
-            listener.onCombateTerminado(
-                ganador.getNombre(),
-                ganador.getPeso(),
-                ganador.getVictorias()
-            );
+            // Notificar al ControlGeneral que hay un nuevo luchador registrado
+            controlGeneral.luchadorRegistrado(this);
 
-            entrada.readUTF(); // esperar confirmacion de cierre
+            // Esperar resultado (bloqueante hasta que el combate termine)
+            // La respuesta la envia ControlGeneral cuando conoce el resultado
+            entrada.readUTF(); // esperar confirmacion de cierre del cliente
             socket.close();
 
-        } catch (IOException | InterruptedException e) {
-            listener.onError("Error en hilo de " +
-                (rikishi != null ? rikishi.getNombre() : "desconocido") +
-                ": " + e.getMessage());
+        } catch (IOException e) {
+            listener.onError("Error en hilo de " + nombre + ": " + e.getMessage());
         }
     }
 
     /**
-     * Lee los datos del cliente y construye el Rikishi con sus kimarites como Strings.
-     * Formato: "NOMBRE|PESO|kimarite1,kimarite2,..."
-     *
-     * @throws IOException Si ocurre un error al leer el socket.
+     * Envia el resultado al cliente.
+     * @param resultado "GANASTE" o "PERDISTE".
+     * @throws IOException Si ocurre error al enviar.
      */
-    private void recibirDatos() throws IOException {
-        String linea    = entrada.readUTF();
-        String[] partes = linea.split("\\|");
-        String nombre   = partes[0];
-        double peso     = Double.parseDouble(partes[1]);
-
-        rikishi = new Rikishi(nombre, peso);
-
-        if (partes.length > 2) {
-            String[] tecnicas = partes[2].split(",");
-            List<String> lista = new ArrayList<>();
-            for (String t : tecnicas) {
-                if (!t.trim().isEmpty()) lista.add(t.trim());
-            }
-            rikishi.setKimarites(lista);
-        }
+    public void notificarResultado(String resultado) throws IOException {
+        salida.writeUTF(resultado);
     }
 
     /**
-     * Envia el resultado al cliente por socket.
-     *
-     * @param mensaje "GANASTE" o "PERDISTE".
-     * @throws IOException Si ocurre un error al enviar.
+     * Obtiene el nombre del luchador.
+     * @return Nombre.
      */
-    public void notificarResultado(String mensaje) throws IOException {
-        salida.writeUTF(mensaje);
-    }
-
-    /**
-     * Obtiene el rikishi de este hilo.
-     *
-     * @return Objeto Rikishi del luchador.
-     */
-    public Rikishi getRikishi() { return rikishi; }
+    public String getNombreLuchador() { return nombre; }
 }

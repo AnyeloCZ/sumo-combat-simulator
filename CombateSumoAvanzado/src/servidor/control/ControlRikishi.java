@@ -1,13 +1,12 @@
-package cliente.control;
+package servidor.control;
 
-import cliente.modelo.Rikishi;
+import servidor.modelo.Rikishi;
 
 import java.util.List;
 
 /**
- * Controlador responsable de crear y configurar objetos Rikishi.
- * Es el unico que instancia objetos Rikishi.
- * Los kimarites se manejan directamente como Strings.
+ * Controlador responsable de crear y serializar objetos Rikishi.
+ * Unico que instancia Rikishi en el lado del cliente.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -15,20 +14,20 @@ import java.util.List;
 public class ControlRikishi {
 
     /**
-     * Crea un objeto Rikishi con nombre y peso.
+     * Crea un Rikishi con nombre y peso.
      *
      * @param nombre Nombre del luchador.
-     * @param peso   Peso del luchador en kg.
-     * @return Nuevo objeto Rikishi.
+     * @param peso   Peso en kg.
+     * @return Nuevo Rikishi.
      */
     public Rikishi crearRikishi(String nombre, double peso) {
         return new Rikishi(nombre, peso);
     }
 
     /**
-     * Asigna la lista de kimarites (Strings) a un Rikishi dado.
+     * Asigna la lista de kimarites a un Rikishi.
      *
-     * @param rikishi  Luchador al que se le asignan las tecnicas.
+     * @param rikishi   Luchador al que se le asignan las tecnicas.
      * @param kimarites Lista de nombres de tecnicas.
      */
     public void asignarKimarites(Rikishi rikishi, List<String> kimarites) {
@@ -40,9 +39,10 @@ public class ControlRikishi {
      * Formato: "NOMBRE|PESO|kimarite1,kimarite2,..."
      *
      * @param rikishi Luchador a serializar.
-     * @return Cadena serializada lista para enviar.
+     * @return Cadena serializada.
      */
     public String serializarRikishi(Rikishi rikishi) {
-        return rikishi.serializar();
+        return rikishi.getNombre() + "|" + rikishi.getPeso() + "|" +
+               String.join(",", rikishi.getKimarites());
     }
 }

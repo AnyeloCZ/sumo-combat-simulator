@@ -1,9 +1,10 @@
 package cliente.control;
 
-import cliente.modelo.Rikishi;
+import cliente.modelo.ConexionSocket;
 import cliente.vista.VentanaCliente;
 
 import javax.swing.JFileChooser;
+import javax.swing.SwingUtilities;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
@@ -12,30 +13,32 @@ import java.util.List;
 /**
  * Controlador de vista del cliente de sumo.
  * Crea su propia VentanaCliente internamente.
- * Implementa ActionListener directamente para manejar todos los eventos.
- * Coordina ControlRikishi, ControlProperties y HiloConexionCliente.
+ * Implementa ActionListener directamente.
+ * Usa ConexionSocket (unica clase de cliente.modelo) para comunicarse.
+ * ControlRikishi y ControlProperties estan en servidor.control pero
+ * se instancian aqui para preparar los datos antes de enviarlos.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class ControlVista implements ActionListener {
 
-    /** Ventana del cliente creada internamente. */
+    /** Ventana del cliente. */
     private VentanaCliente ventana;
 
     /** Controlador de creacion de Rikishi. */
-    private ControlRikishi controlRikishi;
+    private servidor.control.ControlRikishi controlRikishi;
 
-    /** Controlador de carga de propiedades. */
-    private ControlProperties controlProperties;
+    /** Controlador de propiedades. */
+    private servidor.control.ControlProperties controlProperties;
 
     /**
-     * Constructor que crea la ventana internamente y registra los listeners.
+     * Constructor que crea la ventana y registra listeners.
      */
     public ControlVista() {
-        this.ventana           = new VentanaCliente();
-        this.controlRikishi    = new ControlRikishi();
-        this.controlProperties = new ControlProperties();
+        this.ventana            = new VentanaCliente();
+        this.controlRikishi     = new servidor.control.ControlRikishi();
+        this.controlProperties  = new servidor.control.ControlProperties();
         registrarListeners();
     }
 
@@ -47,7 +50,7 @@ public class ControlVista implements ActionListener {
     }
 
     /**
-     * Registra este controlador como ActionListener de los botones de la ventana.
+     * Registra este controlador como listener de los botones.
      */
     private void registrarListeners() {
         ventana.getBtnSeleccionarProperties().addActionListener(this);
@@ -55,10 +58,9 @@ public class ControlVista implements ActionListener {
     }
 
     /**
-     * Despacha los eventos segun la fuente del boton.
-     * Implementacion del metodo de ActionListener.
+     * Despacha eventos segun el boton presionado.
      *
-     * @param e Evento de accion recibido.
+     * @param e Evento de accion.
      */
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -69,25 +71,19 @@ public class ControlVista implements ActionListener {
         }
     }
 
-    // ======================== PERFORMED ========================
-
     /**
-     * Abre JFileChooser para seleccionar el archivo .properties y carga los kimarites.
+     * Abre JFileChooser para seleccionar el .properties y carga los kimarites.
      *
      * @param e Evento de accion.
      */
     private void performedSeleccionarProperties(ActionEvent e) {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Seleccionar archivo de kimarites (.properties)");
-        fileChooser.setFileFilter(
-            new javax.swing.filechooser.FileNameExtensionFilter(
-                "Archivos de propiedades (*.properties)", "properties"
-            )
-        );
-
-        int resultado = fileChooser.showOpenDialog(ventana);
-        if (resultado == JFileChooser.APPROVE_OPTION) {
-            String ruta = fileChooser.getSelectedFile().getAbsolutePath();
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("Seleccionar archivo de kimarites (.properties)");
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+            "Archivos de propiedades (*.properties)", "properties"
+        ));
+        if (fc.showOpenDialog(ventana) == JFileChooser.APPROVE_OPTION) {
+            String ruta = fc.getSelectedFile().getAbsolutePath();
             try {
                 List<String> kimarites = controlProperties.cargarKimarites(ruta);
                 ventana.cargarKimarites(kimarites);
@@ -99,8 +95,7 @@ public class ControlVista implements ActionListener {
     }
 
     /**
-     * Valida los datos del formulario, crea el Rikishi y lanza el HiloConexionCliente.
-     * El HOST y PUERTO son tomados de los campos ingresados por el usuario.
+     * Valida datos, crea el Rikishi y lanza HiloConexionCliente.
      *
      * @param e Evento de accion.
      */
@@ -109,43 +104,37 @@ public class ControlVista implements ActionListener {
         String pesoStr   = ventana.getPeso().trim();
         String host      = ventana.getHost().trim();
         String puertoStr = ventana.getPuerto().trim();
-        List<String> kimaritesSeleccionados = ventana.getKimaritesSeleccionados();
+        List<String> kimarites = ventana.getKimaritesSeleccionados();
 
-        if (nombre.isEmpty()) {
-            ventana.mostrarEstado("Ingresa tu nombre de luchador.");
-            return;
-        }
+        if (nombre.isEmpty()) { ventana.mostrarEstado("Ingresa tu nombre."); return; }
 
         double peso;
         try {
             peso = Double.parseDouble(pesoStr);
             if (peso <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
-            ventana.mostrarEstado("El peso debe ser un numero positivo valido.");
+            ventana.mostrarEstado("El peso debe ser un numero positivo.");
             return;
         }
 
-        if (host.isEmpty()) {
-            ventana.mostrarEstado("Ingresa la direccion del servidor.");
-            return;
-        }
+        if (host.isEmpty()) { ventana.mostrarEstado("Ingresa el host."); return; }
 
         int puerto;
         try {
             puerto = Integer.parseInt(puertoStr);
             if (puerto <= 0 || puerto > 65535) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
-            ventana.mostrarEstado("El puerto debe ser un numero entre 1 y 65535.");
+            ventana.mostrarEstado("Puerto invalido (1-65535).");
             return;
         }
 
-        if (kimaritesSeleccionados == null || kimaritesSeleccionados.isEmpty()) {
+        if (kimarites == null || kimarites.isEmpty()) {
             ventana.mostrarEstado("Selecciona al menos una tecnica.");
             return;
         }
 
-        Rikishi rikishi = controlRikishi.crearRikishi(nombre, peso);
-        controlRikishi.asignarKimarites(rikishi, kimaritesSeleccionados);
+        servidor.modelo.Rikishi rikishi = controlRikishi.crearRikishi(nombre, peso);
+        controlRikishi.asignarKimarites(rikishi, kimarites);
         String datos = controlRikishi.serializarRikishi(rikishi);
 
         ventana.setBtnEnviarHabilitado(false);
@@ -155,13 +144,10 @@ public class ControlVista implements ActionListener {
         hilo.start();
     }
 
-    // ======================== METODOS DE NOTIFICACION ========================
-
     /**
-     * Muestra el resultado final del combate en la ventana.
-     * Llamado desde HiloConexionCliente via SwingUtilities.
+     * Notifica el resultado del combate en la vista.
      *
-     * @param gano   true si el luchador gano.
+     * @param gano   true si gano.
      * @param nombre Nombre del luchador.
      */
     public void notificarResultado(boolean gano, String nombre) {
@@ -169,8 +155,7 @@ public class ControlVista implements ActionListener {
     }
 
     /**
-     * Actualiza el estado en la ventana.
-     * Llamado desde HiloConexionCliente via SwingUtilities.
+     * Actualiza el estado en la vista.
      *
      * @param mensaje Mensaje a mostrar.
      */
@@ -180,7 +165,6 @@ public class ControlVista implements ActionListener {
 
     /**
      * Habilita el boton enviar.
-     * Llamado desde HiloConexionCliente en caso de error de conexion.
      */
     public void habilitarEnviar() {
         ventana.setBtnEnviarHabilitado(true);

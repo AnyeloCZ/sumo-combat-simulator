@@ -1,14 +1,14 @@
 package cliente.control;
 
-import cliente.modelo.ClienteSocket;
+import cliente.modelo.ConexionSocket;
 
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 
 /**
- * Hilo que gestiona la conexion con el servidor de sumo desde el cliente.
- * Envia los datos del luchador, espera el resultado y actualiza la vista.
- * Separa la logica de red del hilo principal de la interfaz grafica.
+ * Hilo que gestiona la conexion con el servidor desde el cliente.
+ * Usa ConexionSocket (unica clase de cliente.modelo).
+ * Envia datos del luchador y espera el resultado del combate.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -17,16 +17,12 @@ public class HiloConexionCliente extends Thread {
 
     /** Datos serializados del luchador. */
     private String datos;
-
     /** Host del servidor. */
     private String host;
-
     /** Puerto del servidor. */
     private int puerto;
-
     /** Nombre del luchador. */
     private String nombre;
-
     /** Controlador de vista para notificar resultados. */
     private ControlVista controlVista;
 
@@ -37,7 +33,7 @@ public class HiloConexionCliente extends Thread {
      * @param host         Host del servidor.
      * @param puerto       Puerto del servidor.
      * @param nombre       Nombre del luchador.
-     * @param controlVista Controlador de vista para notificar resultados.
+     * @param controlVista Controlador de vista.
      */
     public HiloConexionCliente(String datos, String host, int puerto,
                                 String nombre, ControlVista controlVista) {
@@ -49,62 +45,55 @@ public class HiloConexionCliente extends Thread {
     }
 
     /**
-     * Ejecuta la conexion al servidor, envia los datos del luchador
-     * y espera la respuesta. Actualiza la vista en el hilo de Swing.
+     * Conecta al servidor, envia datos y espera el resultado.
      */
     @Override
     public void run() {
-        ClienteSocket clienteSocket = new ClienteSocket(host, puerto);
+        ConexionSocket conexion = new ConexionSocket(host, puerto);
         try {
-            clienteSocket.conectar();
-            actualizarEstado("Conectado. Esperando rival y resultado...");
-            clienteSocket.enviarDatos(datos);
-            String respuesta = clienteSocket.recibirRespuesta();
-            clienteSocket.cerrar();
-            mostrarResultadoEnSwing("GANASTE".equals(respuesta));
+            conexion.conectar();
+            actualizarEstado("Conectado. Esperando resultado...");
+            conexion.enviarDatos(datos);
+            String respuesta = conexion.recibirRespuesta();
+            conexion.cerrar();
+            mostrarResultado("GANASTE".equals(respuesta));
         } catch (IOException ex) {
             actualizarEstado("Error de conexion: " + ex.getMessage());
-            habilitarEnviarEnSwing();
+            habilitarEnviar();
         }
     }
 
     /**
-     * Actualiza el estado de la vista en el hilo de Swing.
+     * Actualiza el estado en el hilo de Swing.
      *
-     * @param mensaje Mensaje a mostrar en la vista.
+     * @param mensaje Mensaje a mostrar.
      */
     private void actualizarEstado(String mensaje) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
-            public void run() {
-                controlVista.notificarEstado(mensaje);
-            }
+            public void run() { controlVista.notificarEstado(mensaje); }
         });
     }
 
     /**
-     * Muestra el resultado final del combate en el hilo de Swing.
+     * Muestra el resultado en el hilo de Swing.
      *
-     * @param gano true si el luchador gano el combate.
+     * @param gano true si gano.
      */
-    private void mostrarResultadoEnSwing(boolean gano) {
+    private void mostrarResultado(boolean gano) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
-            public void run() {
-                controlVista.notificarResultado(gano, nombre);
-            }
+            public void run() { controlVista.notificarResultado(gano, nombre); }
         });
     }
 
     /**
-     * Habilita el boton enviar en el hilo de Swing.
+     * Habilita el boton enviar en caso de error.
      */
-    private void habilitarEnviarEnSwing() {
+    private void habilitarEnviar() {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
-            public void run() {
-                controlVista.habilitarEnviar();
-            }
+            public void run() { controlVista.habilitarEnviar(); }
         });
     }
 }

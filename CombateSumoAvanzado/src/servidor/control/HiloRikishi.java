@@ -1,7 +1,5 @@
 package servidor.control;
 
-import servidor.modelo.Rikishi;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -11,9 +9,9 @@ import java.util.List;
 
 /**
  * Hilo que atiende a un cliente conectado por socket.
- * Recibe datos, los registra en BD via ControlBD y queda
- * esperando la notificacion del resultado del combate.
- * Solo conoce a ControlBD y al listener de eventos.
+ * Recibe los datos del luchador, los registra en BD y queda
+ * bloqueado esperando que ControlGeneral le notifique el resultado
+ * via notificarResultado(). Luego espera confirmacion de cierre.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -30,17 +28,22 @@ public class HiloRikishi extends Thread {
     private DataOutputStream salida;
     /** Listener de eventos para la vista. */
     private IEventosCombate listener;
-    /** Nombre del luchador recibido. */
+    /** Nombre del luchador. */
     private String nombre;
-    /** Controlador general para notificar registro. */
+    /** Controlador general. */
     private ControlGeneral controlGeneral;
+    /** Objeto de sincronizacion para esperar el resultado. */
+    private final Object lock = new Object();
+    /** Resultado del combate: GANASTE o PERDISTE. */
+    private String resultado;
 
     /**
      * Constructor del hilo.
+     *
      * @param socket         Socket del cliente.
      * @param controlBD      Controlador de BD.
      * @param listener       Listener de eventos.
-     * @param controlGeneral Controlador principal para notificar registro.
+     * @param controlGeneral Controlador principal.
      */
     public HiloRikishi(Socket socket, ControlBD controlBD,
                         IEventosCombate listener, ControlGeneral controlGeneral) {
@@ -51,7 +54,8 @@ public class HiloRikishi extends Thread {
     }
 
     /**
-     * Recibe datos del cliente, registra en BD y espera resultado.
+     * Recibe datos del cliente, registra en BD, espera el resultado
+     * y lo envia de vuelta al cliente. Luego espera confirmacion de cierre.
      */
     @Override
     public void run() {
@@ -59,7 +63,7 @@ public class HiloRikishi extends Thread {
             entrada = new DataInputStream(socket.getInputStream());
             salida  = new DataOutputStream(socket.getOutputStream());
 
-            // Recibir datos del luchador
+            // 1. Recibir datos del luchador
             String linea    = entrada.readUTF();
             String[] partes = linea.split("\\|");
             nombre          = partes[0];
@@ -72,34 +76,55 @@ public class HiloRikishi extends Thread {
                 }
             }
 
-            // Registrar en BD
+            // 2. Registrar en BD
             controlBD.registrarLuchador(nombre, peso, kimarites);
             listener.onLuchadorLlego(nombre, peso);
 
-            // Notificar al ControlGeneral que hay un nuevo luchador registrado
+            // 3. Notificar al ControlGeneral
             controlGeneral.luchadorRegistrado(this);
 
-            // Esperar resultado (bloqueante hasta que el combate termine)
-            // La respuesta la envia ControlGeneral cuando conoce el resultado
-            entrada.readUTF(); // esperar confirmacion de cierre del cliente
+            // 4. Esperar resultado — bloqueado aqui hasta que
+            //    ControlGeneral llame a notificarResultado()
+            synchronized (lock) {
+                while (resultado == null) {
+                    lock.wait();
+                }
+            }
+
+            // 5. Enviar resultado al cliente
+            salida.writeUTF(resultado);
+
+            // 6. Esperar confirmacion de cierre del cliente
+            try {
+                entrada.readUTF(); // lee "CERRADO"
+            } catch (IOException e) {
+                // cliente cerro sin confirmar, ignorar
+            }
+
             socket.close();
 
-        } catch (IOException e) {
-            listener.onError("Error en hilo de " + nombre + ": " + e.getMessage());
+        } catch (IOException | InterruptedException e) {
+            listener.onError("Error en hilo de " +
+                (nombre != null ? nombre : "desconocido") + ": " + e.getMessage());
         }
     }
 
     /**
-     * Envia el resultado al cliente.
+     * Llamado por ControlGeneral para notificar el resultado al hilo.
+     * Desbloquea el wait() interno.
+     *
      * @param resultado "GANASTE" o "PERDISTE".
-     * @throws IOException Si ocurre error al enviar.
      */
-    public void notificarResultado(String resultado) throws IOException {
-        salida.writeUTF(resultado);
+    public void notificarResultado(String resultado) {
+        synchronized (lock) {
+            this.resultado = resultado;
+            lock.notifyAll();
+        }
     }
 
     /**
      * Obtiene el nombre del luchador.
+     *
      * @return Nombre.
      */
     public String getNombreLuchador() { return nombre; }

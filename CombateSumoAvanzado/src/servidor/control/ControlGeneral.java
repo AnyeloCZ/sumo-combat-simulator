@@ -9,16 +9,16 @@ import java.util.List;
 
 /**
  * Controlador principal del servidor del parcial.
- * Orquesta el registro de luchadores, el inicio de combates
- * y el cierre ordenado al terminar.
- * Minimo 6 luchadores registrados antes de iniciar los combates.
+ * Registra luchadores hasta llegar al minimo requerido,
+ * luego cierra el ServerSocket e inicia los 3 combates.
+ * Al terminar notifica a cada cliente y muestra el RAF.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class ControlGeneral {
 
-    /** Minimo de luchadores requeridos para iniciar combates. */
+    /** Minimo de luchadores para iniciar combates. */
     private static final int MIN_LUCHADORES = 6;
 
     /** Controlador de vista. */
@@ -29,27 +29,31 @@ public class ControlGeneral {
     private ControlRAF controlRAF;
     /** Controlador de combates. */
     private ControlCombates controlCombates;
-    /** ServerSocket para cerrar cuando se alcancen los 6 luchadores. */
+    /** ServerSocket activo. */
     private ServerSocket serverSocket;
-    /** Hilos de luchadores registrados (para notificarles el resultado). */
+    /** Hilos de luchadores registrados. */
     private List<HiloRikishi> hilosRegistrados;
-    /** Contador de luchadores registrados. */
+    /** Total de luchadores registrados. */
     private int totalRegistrados;
+    /** Bandera para no iniciar combates dos veces. */
+    private boolean combatesIniciados;
 
     /**
      * Inicia la aplicacion servidor creando el ControlVista.
      */
     public void iniciar() {
-        controlVista       = new ControlVista(this);
-        controlBD          = new ControlBD();
-        controlRAF         = new ControlRAF();
-        hilosRegistrados   = new ArrayList<>();
-        totalRegistrados   = 0;
+        controlVista     = new ControlVista(this);
+        controlBD        = new ControlBD();
+        controlRAF       = new ControlRAF();
+        hilosRegistrados = new ArrayList<>();
+        totalRegistrados = 0;
+        combatesIniciados = false;
         controlVista.mostrarVentana();
     }
 
     /**
      * Arranca el servidor en el puerto indicado.
+     *
      * @param puerto Puerto del servidor.
      */
     public void iniciarServidor(int puerto) {
@@ -59,23 +63,25 @@ public class ControlGeneral {
     }
 
     /**
-     * Llamado por cada HiloRikishi cuando un luchador se registra en la BD.
-     * Cuando se alcanzan MIN_LUCHADORES, cierra el ServerSocket e inicia combates.
+     * Llamado por cada HiloRikishi cuando un luchador se registra en BD.
+     * Cuando se alcanzan MIN_LUCHADORES, cierra ServerSocket e inicia combates.
+     *
      * @param hilo HiloRikishi del luchador registrado.
      */
     public synchronized void luchadorRegistrado(HiloRikishi hilo) {
         hilosRegistrados.add(hilo);
         totalRegistrados++;
-        controlVista.mostrarMensaje("Luchadores registrados: " + totalRegistrados + "/" + MIN_LUCHADORES);
+        controlVista.mostrarMensaje("Luchadores: " + totalRegistrados + "/" + MIN_LUCHADORES);
 
-        if (totalRegistrados >= MIN_LUCHADORES) {
+        if (totalRegistrados >= MIN_LUCHADORES && !combatesIniciados) {
+            combatesIniciados = true;
             cerrarServerSocket();
-            iniciarCombates();
+            iniciarCombatesEnHilo();
         }
     }
 
     /**
-     * Cierra el ServerSocket para dejar de aceptar nuevas conexiones.
+     * Cierra el ServerSocket para no aceptar mas conexiones.
      */
     public void cerrarServerSocket() {
         try {
@@ -88,52 +94,58 @@ public class ControlGeneral {
     }
 
     /**
-     * Asigna el ServerSocket para poder cerrarlo cuando sea necesario.
-     * @param serverSocket ServerSocket activo.
+     * Asigna el ServerSocket activo.
+     *
+     * @param serverSocket ServerSocket del servidor.
      */
     public void setServerSocket(ServerSocket serverSocket) {
         this.serverSocket = serverSocket;
     }
 
     /**
-     * Ejecuta los tres combates en secuencia y al finalizar
-     * notifica a todos los clientes y muestra el RAF.
+     * Lanza los combates en un hilo separado para no bloquear.
      */
-    private void iniciarCombates() {
+    private void iniciarCombatesEnHilo() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     controlCombates.cargarLuchadores();
+                    controlVista.mostrarMensaje("Iniciando combates...");
 
                     while (controlCombates.hayCombatesPendientes()) {
                         controlCombates.ejecutarSiguienteCombate();
                     }
 
                     // Notificar resultado a cada cliente
-                    List<Rikishi> todos = controlBD.obtenerTodos();
-                    for (HiloRikishi hilo : hilosRegistrados) {
-                        String nombre = hilo.getNombreLuchador();
-                        boolean gano  = todos.stream()
-                            .anyMatch(r -> r.getNombre().equals(nombre) && r.getVictorias() > 0);
-                        try {
-                            hilo.notificarResultado(gano ? "GANASTE" : "PERDISTE");
-                        } catch (IOException e) {
-                            System.err.println("Error notificando a " + nombre);
-                        }
-                    }
+                    notificarResultadosAClientes();
 
-                    // Mostrar RAF por consola cuando todos los clientes terminen
-                    String contenidoRAF = controlRAF.leerResultados(
+                    // Mostrar RAF por consola
+                    String raf = controlRAF.leerResultados(
                         controlCombates.getTotalCombatesRealizados()
                     );
-                    System.out.println(contenidoRAF);
-                    controlVista.mostrarMensaje("Todos los combates finalizados. Ver consola para resultados.");
+                    System.out.println(raf);
+                    controlVista.mostrarMensaje("Fin. Ver consola para resultados del RAF.");
 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             }
         }).start();
+    }
+
+    /**
+     * Notifica a cada HiloRikishi si su luchador gano o perdio.
+     * Determina el resultado consultando victorias en la BD.
+     */
+    private void notificarResultadosAClientes() {
+        List<Rikishi> todos = controlBD.obtenerTodos();
+        for (HiloRikishi hilo : hilosRegistrados) {
+            String nombre = hilo.getNombreLuchador();
+            boolean gano  = todos.stream().anyMatch(r ->
+                r.getNombre().equals(nombre) && r.getVictorias() > 0
+            );
+            hilo.notificarResultado(gano ? "GANASTE" : "PERDISTE");
+        }
     }
 }

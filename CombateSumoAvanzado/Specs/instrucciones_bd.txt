@@ -34,7 +34,7 @@ participo TINYINT(1) NOT NULL DEFAULT 0
 
 VERSIONES PROBADAS:
 --------------------
-- Java 8+
+- Java 5+
 - MySQL 5.x / XAMPP 3.x
 - Driver: mysql-connector-java-5.1.46.jar
 - NetBeans 12+ (proyecto Java Ant)

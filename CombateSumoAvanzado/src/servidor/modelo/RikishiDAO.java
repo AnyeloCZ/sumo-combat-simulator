@@ -32,9 +32,15 @@ public class RikishiDAO implements IRikishiDAO {
             ps.setInt(3, rikishi.getVictorias());
             ps.setString(4, String.join(",", rikishi.getKimarites()));
             ps.setBoolean(5, rikishi.isParticipo());
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            System.err.println("Error insertar: " + e.getMessage());
+            int rows = ps.executeUpdate();
+            return rows > 0;
+        } catch (Exception e) {
+            System.err.println("RikishiDAO.insertar ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            if (e instanceof java.sql.SQLException) {
+                java.sql.SQLException sqle = (java.sql.SQLException) e;
+                System.err.println("SQLState: " + sqle.getSQLState() + " | ErrorCode: " + sqle.getErrorCode());
+            }
+            e.printStackTrace();
             return false;
         }
     }

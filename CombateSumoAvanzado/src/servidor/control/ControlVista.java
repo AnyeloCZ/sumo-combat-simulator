@@ -144,6 +144,19 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
+     * Actualiza el contador de luchadores registrados en la vista.
+     *
+     * @param registrados Cantidad actual de registrados.
+     * @param minimo      Minimo requerido.
+     */
+    public void actualizarContador(int registrados, int minimo) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() { ventana.actualizarContador(registrados, minimo); }
+        });
+    }
+
+    /**
      * Retorna este controlador como listener de eventos.
      * @return Esta instancia.
      */

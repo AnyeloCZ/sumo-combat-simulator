@@ -1,6 +1,6 @@
 package servidor.control;
 
-import servidor.modelo.Dohyo;
+
 import servidor.modelo.Rikishi;
 
 import java.util.List;

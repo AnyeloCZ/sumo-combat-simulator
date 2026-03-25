@@ -35,13 +35,13 @@ public class ControlRikishi {
     }
 
     /**
-     * Serializa un Rikishi para enviarlo por socket.
+     * Convierte un Rikishi a cadena para enviarlo por socket.
      * Formato: "NOMBRE|PESO|kimarite1,kimarite2,..."
      *
-     * @param rikishi Luchador a serializar.
-     * @return Cadena serializada.
+     * @param rikishi Luchador a convertir.
+     * @return Cadena lista para enviar por socket.
      */
-    public String serializarRikishi(Rikishi rikishi) {
+    public String convertirACadena(Rikishi rikishi) {
         return rikishi.getNombre() + "|" + rikishi.getPeso() + "|" +
                String.join(",", rikishi.getKimarites());
     }

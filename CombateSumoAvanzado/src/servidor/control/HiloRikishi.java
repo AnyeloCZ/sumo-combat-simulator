@@ -9,9 +9,8 @@ import java.util.List;
 
 /**
  * Hilo que atiende a un cliente conectado por socket.
- * Recibe los datos del luchador, los registra en BD y queda
- * bloqueado esperando que ControlGeneral le notifique el resultado
- * via notificarResultado(). Luego espera confirmacion de cierre.
+ * Recibe datos, los registra en BD, espera el resultado del combate
+ * y lo notifica al cliente. Usa lock para sincronizacion.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -26,15 +25,19 @@ public class HiloRikishi extends Thread {
     private DataInputStream entrada;
     /** Flujo de salida. */
     private DataOutputStream salida;
-    /** Listener de eventos para la vista. */
+    /** Listener de eventos. */
     private IEventosCombate listener;
     /** Nombre del luchador. */
     private String nombre;
+    /** Peso del luchador. */
+    private double peso;
+    /** Kimarites del luchador. */
+    private List<String> kimarites;
     /** Controlador general. */
     private ControlGeneral controlGeneral;
-    /** Objeto de sincronizacion para esperar el resultado. */
+    /** Lock para esperar el resultado. */
     private final Object lock = new Object();
-    /** Resultado del combate: GANASTE o PERDISTE. */
+    /** Resultado: GANASTE o PERDISTE. */
     private String resultado;
 
     /**
@@ -54,8 +57,8 @@ public class HiloRikishi extends Thread {
     }
 
     /**
-     * Recibe datos del cliente, registra en BD, espera el resultado
-     * y lo envia de vuelta al cliente. Luego espera confirmacion de cierre.
+     * Flujo completo: recibe datos, registra en BD,
+     * espera resultado y notifica al cliente.
      */
     @Override
     public void run() {
@@ -63,13 +66,13 @@ public class HiloRikishi extends Thread {
             entrada = new DataInputStream(socket.getInputStream());
             salida  = new DataOutputStream(socket.getOutputStream());
 
-            // 1. Recibir datos del luchador
+            // 1. Recibir datos
             String linea    = entrada.readUTF();
             String[] partes = linea.split("\\|");
-            nombre          = partes[0];
-            double peso     = Double.parseDouble(partes[1]);
+            nombre          = partes[0].trim();
+            peso            = Double.parseDouble(partes[1].trim());
+            kimarites       = new ArrayList<>();
 
-            List<String> kimarites = new ArrayList<>();
             if (partes.length > 2) {
                 for (String k : partes[2].split(",")) {
                     if (!k.trim().isEmpty()) kimarites.add(k.trim());
@@ -77,41 +80,49 @@ public class HiloRikishi extends Thread {
             }
 
             // 2. Registrar en BD
-            controlBD.registrarLuchador(nombre, peso, kimarites);
+            boolean registrado = false;
+            try {
+                registrado = controlBD.registrarLuchador(nombre, peso, kimarites);
+            } catch (Exception e) {
+                System.err.println("Error BD al registrar " + nombre + ": " + e.getMessage());
+            }
+
+            if (!registrado) {
+                System.err.println("No se pudo registrar " + nombre + " en la BD.");
+            }
+
+            // 3. Notificar llegada a la vista
             listener.onLuchadorLlego(nombre, peso);
 
-            // 3. Notificar al ControlGeneral
+            // 4. Notificar al ControlGeneral (siempre, aunque BD falle)
             controlGeneral.luchadorRegistrado(this);
 
-            // 4. Esperar resultado — bloqueado aqui hasta que
-            //    ControlGeneral llame a notificarResultado()
+            // 5. Esperar resultado del combate
             synchronized (lock) {
                 while (resultado == null) {
                     lock.wait();
                 }
             }
 
-            // 5. Enviar resultado al cliente
+            // 6. Enviar resultado al cliente
             salida.writeUTF(resultado);
 
-            // 6. Esperar confirmacion de cierre del cliente
+            // 7. Esperar confirmacion de cierre
             try {
-                entrada.readUTF(); // lee "CERRADO"
+                entrada.readUTF();
             } catch (IOException e) {
-                // cliente cerro sin confirmar, ignorar
+                // cliente cerro sin confirmar
             }
-
             socket.close();
 
         } catch (IOException | InterruptedException e) {
-            listener.onError("Error en hilo de " +
+            System.err.println("Error hilo " +
                 (nombre != null ? nombre : "desconocido") + ": " + e.getMessage());
         }
     }
 
     /**
-     * Llamado por ControlGeneral para notificar el resultado al hilo.
-     * Desbloquea el wait() interno.
+     * Desbloquea el hilo con el resultado del combate.
      *
      * @param resultado "GANASTE" o "PERDISTE".
      */
@@ -128,4 +139,18 @@ public class HiloRikishi extends Thread {
      * @return Nombre.
      */
     public String getNombreLuchador() { return nombre; }
+
+    /**
+     * Obtiene los kimarites del luchador.
+     *
+     * @return Lista de tecnicas.
+     */
+    public List<String> getKimarites() { return kimarites; }
+
+    /**
+     * Obtiene el peso del luchador.
+     *
+     * @return Peso en kg.
+     */
+    public double getPeso() { return peso; }
 }

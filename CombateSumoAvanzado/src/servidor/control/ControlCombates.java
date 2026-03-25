@@ -1,6 +1,5 @@
 package servidor.control;
 
-import servidor.modelo.Dohyo;
 import servidor.modelo.Rikishi;
 
 import java.util.ArrayList;
@@ -9,10 +8,8 @@ import java.util.Random;
 
 /**
  * Controlador que orquesta los tres combates del parcial.
- * Selecciona luchadores aleatoriamente de la BD, ejecuta el combate
- * usando el Dohyo sincronizado, actualiza victorias y participacion
- * en BD, y coordina con ControlRAF para persistir cada resultado.
- * No crea hilos propios — es invocado desde el hilo de ControlGeneral.
+ * Selecciona luchadores aleatoriamente de la BD, usa el Dohyo directamente
+ * (que es el control del juego), actualiza victorias en BD y guarda en RAF.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -28,7 +25,7 @@ public class ControlCombates {
     /** Ganador del ultimo combate. */
     private Rikishi ganadorActual;
 
-    /** Luchadores pendientes de combatir. */
+    /** Luchadores pendientes. */
     private List<Rikishi> pendientes;
 
     /** Controlador de BD. */
@@ -37,14 +34,14 @@ public class ControlCombates {
     /** Controlador del RAF. */
     private ControlRAF controlRAF;
 
-    /** Listener para notificar eventos a la vista. */
+    /** Listener para eventos de la vista. */
     private IEventosCombate listener;
 
-    /** Generador aleatorio. */
+    /** Generador aleatorio para seleccion de luchadores. */
     private Random random;
 
     /**
-     * Constructor que inicializa los controladores necesarios.
+     * Constructor que inicializa los controladores.
      *
      * @param controlBD  Controlador de base de datos.
      * @param controlRAF Controlador del archivo de acceso aleatorio.
@@ -67,19 +64,17 @@ public class ControlCombates {
     }
 
     /**
-     * Indica si aun quedan combates por realizar.
+     * Indica si quedan combates por realizar.
      *
      * @return true si hay combates pendientes.
      */
     public boolean hayCombatesPendientes() {
-        return numeroCombate < TOTAL_COMBATES && pendientes.size() > 0;
+        return numeroCombate < TOTAL_COMBATES && !pendientes.isEmpty();
     }
 
     /**
-     * Ejecuta el siguiente combate sincronicamente usando el Dohyo.
-     * Combate 1: dos luchadores aleatorios.
-     * Combates 2-3: ganador anterior vs nuevo aleatorio.
-     * Al terminar: actualiza BD y guarda en RAF con datos de la BD.
+     * Ejecuta el siguiente combate usando el Dohyo directamente.
+     * El Dohyo es quien sincroniza los luchadores y dirige el combate.
      *
      * @throws InterruptedException Si el hilo es interrumpido.
      */
@@ -92,56 +87,39 @@ public class ControlCombates {
         luchador1.setEnDohyo(true);
         luchador2.setEnDohyo(true);
 
-        ControlDohyo controlDohyo = new ControlDohyo();
+        // El Dohyo ES el control del juego — se usa directamente
+        Dohyo dohyo = new Dohyo();
 
         listener.onCombateIniciado(luchador1.getNombre(), luchador2.getNombre());
 
-        // Registrar los dos luchadores en el Dohyo
-        controlDohyo.registrarRikishi(luchador1);
-        controlDohyo.registrarRikishi(luchador2);
+        dohyo.registrarRikishi(luchador1);
+        dohyo.registrarRikishi(luchador2);
 
-        // Ejecutar combate turno a turno — el Dohyo sincroniza los turnos
-        // Se alternan los turnos entre luchador1 y luchador2
-        while (!controlDohyo.isCombateTerminado()) {
-            // Turno del luchador 1
-            if (!controlDohyo.isCombateTerminado()) {
-                controlDohyo.ejecutarTurno(luchador1);
-                if (!controlDohyo.isCombateTerminado()) {
-                    listener.onTurnoEjecutado(
-                        controlDohyo.getUltimoAtacante(),
-                        controlDohyo.getUltimaKimarite()
-                    );
-                }
-            }
-            // Turno del luchador 2
-            if (!controlDohyo.isCombateTerminado()) {
-                controlDohyo.ejecutarTurno(luchador2);
-                if (!controlDohyo.isCombateTerminado()) {
-                    listener.onTurnoEjecutado(
-                        controlDohyo.getUltimoAtacante(),
-                        controlDohyo.getUltimaKimarite()
-                    );
+        // Turnos alternados hasta que haya ganador
+        while (!dohyo.isCombateTerminado()) {
+            dohyo.ejecutarTurno(luchador1);
+            if (!dohyo.isCombateTerminado()) {
+                listener.onTurnoEjecutado(dohyo.getUltimoAtacante(), dohyo.getUltimaKimarite());
+                dohyo.ejecutarTurno(luchador2);
+                if (!dohyo.isCombateTerminado()) {
+                    listener.onTurnoEjecutado(dohyo.getUltimoAtacante(), dohyo.getUltimaKimarite());
                 }
             }
         }
 
-        Rikishi ganador  = controlDohyo.getGanador();
+        Rikishi ganador  = dohyo.getGanador();
         Rikishi perdedor = (ganador == luchador1) ? luchador2 : luchador1;
 
-        // Actualizar victorias y participacion en BD
-        ganador.incrementarVictorias();
         controlBD.actualizarVictorias(ganador.getId(), ganador.getVictorias());
         controlBD.marcarParticipacion(luchador1.getId());
         controlBD.marcarParticipacion(luchador2.getId());
 
-        // Datos del RAF vienen expresamente de la BD
+        // Datos del RAF vienen de la BD
         Rikishi ganadorBD  = controlBD.obtenerPorId(ganador.getId());
         Rikishi perdedorBD = controlBD.obtenerPorId(perdedor.getId());
         controlRAF.guardarResultado(numeroCombate, ganadorBD, perdedorBD);
 
-        listener.onCombateTerminado(
-            ganador.getNombre(), ganador.getPeso(), ganador.getVictorias()
-        );
+        listener.onCombateTerminado(ganador.getNombre(), ganador.getPeso(), ganador.getVictorias());
 
         ganadorActual = ganador;
     }
@@ -149,23 +127,16 @@ public class ControlCombates {
     /**
      * Selecciona y elimina un luchador aleatorio de los pendientes.
      *
-     * @return Rikishi seleccionado aleatoriamente.
+     * @return Rikishi seleccionado.
      */
     private Rikishi seleccionarAleatorio() {
         return pendientes.remove(random.nextInt(pendientes.size()));
     }
 
     /**
-     * Retorna el numero del combate actual.
+     * Retorna el total de combates realizados.
      *
-     * @return Numero de combate.
-     */
-    public int getNumeroCombate() { return numeroCombate; }
-
-    /**
-     * Retorna el total de combates realizados para el RAF.
-     *
-     * @return Total de combates realizados.
+     * @return Total de combates.
      */
     public int getTotalCombatesRealizados() { return numeroCombate; }
 }

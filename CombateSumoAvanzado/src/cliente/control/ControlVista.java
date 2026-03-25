@@ -1,21 +1,24 @@
 package cliente.control;
 
 import cliente.modelo.ConexionSocket;
-import cliente.modelo.PropertiesCliente;
 import cliente.vista.VentanaCliente;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Controlador de vista del cliente de sumo.
  * Crea su propia VentanaCliente internamente.
  * Implementa ActionListener directamente.
- * Lee host y puerto desde Data/cliente.properties via PropertiesCliente.
+ * Lee host y puerto directamente desde Data/cliente.properties en el control.
  * El JFileChooser esta en la Vista — el control solo coordina la logica.
  * El cliente NO tiene hilos: el socket hace el envio/recepcion directo.
+ * Formato de envio al servidor: "nombre|peso|tecnica1,tecnica2,..."
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -24,12 +27,6 @@ public class ControlVista implements ActionListener {
 
     /** Ventana del cliente. */
     private VentanaCliente ventana;
-
-    /** Controlador de creacion de Rikishi. */
-    private servidor.control.ControlRikishi controlRikishi;
-
-    /** Controlador de propiedades de kimarites. */
-    private servidor.control.ControlProperties controlProperties;
 
     /** Host del servidor desde properties. */
     private String host;
@@ -41,29 +38,27 @@ public class ControlVista implements ActionListener {
      * Constructor: crea ventana, lee properties y registra listeners.
      */
     public ControlVista() {
-        this.ventana           = new VentanaCliente();
-        this.controlRikishi    = new servidor.control.ControlRikishi();
-        this.controlProperties = new servidor.control.ControlProperties();
+        this.ventana = new VentanaCliente();
         cargarConfiguracion();
         registrarListeners();
     }
 
     /**
-     * Carga host y puerto desde Data/cliente.properties.
-     * Si falla usa valores por defecto y avisa en la vista.
+     * Carga host y puerto leyendo directamente Data/cliente.properties.
+     * Si falla usa valores por defecto sin mostrar advertencia.
      */
     private void cargarConfiguracion() {
-        try {
-            PropertiesCliente props = new PropertiesCliente();
-            this.host   = props.getHost();
-            this.puerto = props.getPuerto();
-            ventana.setHost(host);
-            ventana.setPuerto(String.valueOf(puerto));
+        Properties props = new Properties();
+        try (FileInputStream fis = new FileInputStream("Data/cliente.properties")) {
+            props.load(fis);
+            this.host   = props.getProperty("servidor.host", "localhost");
+            this.puerto = Integer.parseInt(props.getProperty("servidor.puerto", "9090"));
         } catch (IOException e) {
             this.host   = "localhost";
             this.puerto = 9090;
-            ventana.mostrarEstado("Advertencia: cliente.properties no encontrado. Usando valores por defecto.");
         }
+        ventana.setHost(host);
+        ventana.setPuerto(String.valueOf(puerto));
     }
 
     /**
@@ -97,7 +92,7 @@ public class ControlVista implements ActionListener {
 
     /**
      * Pide a la vista abrir el JFileChooser y devolver la ruta seleccionada,
-     * luego carga los kimarites con ControlProperties.
+     * luego carga los kimarites leyendo el .properties directamente en el cliente.
      *
      * @param e Evento de accion.
      */
@@ -105,7 +100,7 @@ public class ControlVista implements ActionListener {
         String ruta = ventana.abrirSelectorProperties();
         if (ruta != null) {
             try {
-                List<String> kimarites = controlProperties.cargarKimarites(ruta);
+                List<String> kimarites = cargarKimaritesDesdeArchivo(ruta);
                 ventana.cargarKimarites(kimarites);
                 ventana.mostrarEstado("Tecnicas cargadas: " + kimarites.size());
             } catch (IOException ex) {
@@ -115,9 +110,44 @@ public class ControlVista implements ActionListener {
     }
 
     /**
-     * Valida datos, construye la cadena del luchador y la envia al servidor
-     * usando ConexionSocket directamente — sin hilos.
-     * Espera la respuesta bloqueante del servidor.
+     * Lee un archivo .properties y retorna los valores como lista de kimarites.
+     * Lee usando las claves kimarite.1, kimarite.2, etc. segun kimarite.total.
+     * Si no tiene kimarite.total toma todos los valores del archivo.
+     *
+     * @param ruta Ruta absoluta del archivo .properties.
+     * @return Lista de nombres de kimarites.
+     * @throws IOException Si el archivo no se puede leer.
+     */
+    private List<String> cargarKimaritesDesdeArchivo(String ruta) throws IOException {
+        Properties props = new Properties();
+        try (FileInputStream fis = new FileInputStream(ruta)) {
+            props.load(fis);
+        }
+        List<String> kimarites = new ArrayList<>();
+        String totalStr = props.getProperty("kimarite.total");
+        if (totalStr != null) {
+            // Formato con kimarite.total, kimarite.1, kimarite.2...
+            int total = Integer.parseInt(totalStr.trim());
+            for (int i = 1; i <= total; i++) {
+                String k = props.getProperty("kimarite." + i);
+                if (k != null && !k.trim().isEmpty()) kimarites.add(k.trim());
+            }
+        } else {
+            // Formato generico: tomar todos los valores
+            for (String key : props.stringPropertyNames()) {
+                String valor = props.getProperty(key).trim();
+                if (!valor.isEmpty()) kimarites.add(valor);
+            }
+        }
+        return kimarites;
+    }
+
+    /**
+     * Valida datos, construye la cadena del luchador con formato pipe
+     * y la envia al servidor usando ConexionSocket directamente.
+     * Formato enviado: "nombre|peso|tecnica1,tecnica2,..."
+     * El servidor en HiloRikishi espera exactamente ese formato con split("|").
+     * Usa finally para garantizar el cierre del socket.
      *
      * @param e Evento de accion.
      */
@@ -145,28 +175,27 @@ public class ControlVista implements ActionListener {
             return;
         }
 
-        servidor.modelo.Rikishi rikishi = controlRikishi.crearRikishi(nombre, peso);
-        controlRikishi.asignarKimarites(rikishi, kimarites);
-        String datos = controlRikishi.convertirACadena(rikishi);
+        // Formato esperado por HiloRikishi: "nombre|peso|tecnica1,tecnica2,..."
+        String datos = nombre + "|" + peso + "|" + String.join(",", kimarites);
 
         ventana.setBtnEnviarHabilitado(false);
         ventana.mostrarEstado("Conectando a " + host + ":" + puerto + "...");
 
-        // El cliente NO tiene hilos propios.
-        // La conexion, envio y espera se hacen directamente con ConexionSocket.
-        // Esto bloquea la UI mientras espera — es el comportamiento esperado
-        // ya que el cliente solo envia datos y espera el resultado.
         ConexionSocket conexion = new ConexionSocket(host, puerto);
         try {
             conexion.conectar();
             ventana.mostrarEstado("Conectado. Esperando resultado del combate...");
             conexion.enviarDatos(datos);
             String respuesta = conexion.recibirRespuesta();
-            conexion.cerrar();
             ventana.mostrarResultado("GANASTE".equals(respuesta), nombre);
         } catch (IOException ex) {
             ventana.mostrarEstado("Error de conexion: " + ex.getMessage());
             ventana.setBtnEnviarHabilitado(true);
+        } finally {
+            // Garantiza cierre del socket aunque haya error
+            try {
+                if (conexion.isConectado()) conexion.cerrar();
+            } catch (IOException ignore) {}
         }
     }
 }

@@ -1,0 +1,118 @@
+================================================
+ CONTROL DE VERSIONES — GIT
+ Primer Parcial: Sistema de Combate de Sumo
+ Universidad Distrital Francisco José de Caldas
+================================================
+
+INTEGRANTES:
+- Sebastian Zambrano       - 20251020102
+- Anyelo Casas             - 20251020106
+- Diego Yañes              - 20251020103
+
+REPOSITORIO: Control de versiones local con Git
+
+================================================
+RAMAS UTILIZADAS
+================================================
+
+main
+  Rama principal. Contiene la version estable y funcional del proyecto.
+  Todos los cambios aprobados se fusionan aqui.
+
+desarrollo
+  Rama de trabajo activo. Se implementaron las funcionalidades principales:
+  - Arquitectura MVC cliente/servidor
+  - Conexion via sockets
+  - Base de datos MySQL con DAO y Singleton
+  - Archivo de acceso aleatorio (RAF)
+  - Dohyo con sincronizacion wait/notifyAll
+  - Interfaz grafica con animaciones
+
+feature/bd-dao
+  Rama para implementar el patron DAO con IRikishiDAO, RikishiDAO y ConexionBD.
+  Fusionada a desarrollo cuando se verifico que los CRUD funcionaban correctamente.
+
+feature/sockets
+  Rama para implementar la comunicacion cliente-servidor.
+  Incluyendo HiloRikishi, HiloEscucha dentro de ControlGeneral.
+  Fusionada a desarrollo.
+
+feature/dohyo-combate
+  Rama para implementar la logica de combate en el Dohyo (control del juego).
+  Incluye sincronizacion, turnos, kimarites aleatorios, probabilidad 15%.
+  Fusionada a desarrollo.
+
+feature/ui
+  Rama para implementar los efectos visuales del PanelDohyo y VentanaCliente.
+  Animaciones a 60fps, particulas, antorchas, publico, luchadores.
+  Fusionada a desarrollo.
+
+================================================
+HISTORIAL DE VERSIONES RELEVANTES
+================================================
+
+v1.0 - Estructura base MVC
+  - Creacion de paquetes: cliente.control, cliente.modelo, cliente.vista
+  - Creacion de paquetes: servidor.control, servidor.modelo, servidor.vista
+  - Launchers, ControlGeneral, ControlVista basicos
+
+v2.0 - Sockets y comunicacion
+  - Implementacion de ConexionSocket (cliente.modelo)
+  - ServerSocket en ControlGeneral servidor (HiloEscucha)
+  - HiloRikishi para atender cada cliente
+  - Protocolo de comunicacion: "NOMBRE|PESO|k1,k2,..."
+
+v3.0 - Base de datos y DAO
+  - IRikishiDAO (interfaz) + RikishiDAO (implementacion) en servidor.modelo
+  - ConexionBD Singleton + PropertiesBD en servidor.modelo
+  - ControlBD en servidor.control coordinando el DAO
+  - script_bd.sql con CREATE DATABASE sumo_db y CREATE TABLE rikishi
+  - config.properties con credenciales de BD
+
+v4.0 - Logica de combate
+  - Dohyo.java en servidor.control (ES el control del juego)
+  - Sincronizacion con wait/notifyAll entre hilos
+  - ControlCombates: 3 combates, ganador vs nuevo aleatorio
+  - Luchadores que ya participaron no vuelven a luchar
+  - RAF: ArchivoAccesoAleatorio + ControlRAF
+
+v5.0 - Properties cliente y correciones
+  - PropertiesCliente en cliente.modelo
+  - cliente.properties en Data/ con host y puerto
+  - JFileChooser movido completamente a VentanaCliente
+  - 82 tecnicas en tecnicas.properties
+
+v6.0 - Interfaz grafica y efectos
+  - PanelDohyo con animaciones cinematograficas (60fps)
+  - Antorchas con fuego, particulas de sal, publico
+  - Luchadores animados con fisica
+  - VentanaCliente con fondo animado
+
+================================================
+FUSIONES (MERGES) REALIZADAS
+================================================
+
+feature/bd-dao    -> desarrollo   (sin conflictos)
+feature/sockets   -> desarrollo   (sin conflictos)
+feature/dohyo-combate -> desarrollo (resolucion manual en ControlCombates)
+feature/ui        -> desarrollo   (sin conflictos)
+desarrollo        -> main         (version final estable)
+
+================================================
+CONVENCIONES DE COMMITS USADAS
+================================================
+
+feat:  nueva funcionalidad
+fix:   correccion de error
+docs:  documentacion JavaDoc
+style: cambios de formato/visual
+refactor: reestructuracion sin cambio funcional
+
+Ejemplos:
+- feat: implementar HiloRikishi con wait/notifyAll
+- feat: agregar RikishiDAO con patron Singleton en ConexionBD
+- fix: mover JFileChooser de control a vista
+- fix: eliminar HiloCombate, ControlGeneral escucha directamente
+- refactor: Dohyo pasa de modelo a control (ES el control del juego)
+- docs: completar JavaDoc en todas las clases del servidor
+================================================

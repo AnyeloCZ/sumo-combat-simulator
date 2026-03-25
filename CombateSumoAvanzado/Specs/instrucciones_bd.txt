@@ -1,22 +1,41 @@
-=== CONFIGURACION DE LA BASE DE DATOS ===
-Proyecto: Primer Parcial - Combate de Sumo
-Autor: Sebastian Zambrano, Anyelo Casas, Diego Yanes
+================================================
+ INSTRUCCIONES DE BASE DE DATOS — PARCIAL SUMO
+ Universidad Distrital Francisco José de Caldas
+================================================
 
-Base de datos: sumo_db
-Motor: MySQL 8.x
-Herramienta recomendada: MySQL Workbench 8.x
+NOMBRE DE LA BASE DE DATOS: sumo_db
+MOTOR: MySQL 5.x o superior
+HERRAMIENTA: MySQL Workbench / phpMyAdmin / XAMPP
+
+TABLA REQUERIDA: rikishi
 
 PASOS PARA CONFIGURAR:
-1. Instalar MySQL 8.x y MySQL Workbench
-2. Abrir MySQL Workbench y conectarse al servidor local
-3. Abrir y ejecutar el archivo: Data/script_bd.sql
-4. Verificar que se creo la BD sumo_db con la tabla rikishi
-5. Editar Data/config.properties con sus credenciales:
-   db.url=jdbc:mysql://localhost:3306/sumo_db
-   db.usuario=root
-   db.contrasena=SU_CONTRASENA
-6. Colocar el archivo mysql-connector-java.jar en la carpeta lib/
-   y agregarlo al classpath del proyecto en NetBeans
+-----------------------
+1. Abrir phpMyAdmin o MySQL Workbench
+2. Ejecutar el archivo: Data/script_bd.sql
+   (Contiene CREATE DATABASE sumo_db y CREATE TABLE rikishi)
+3. Verificar que existe la BD "sumo_db" con la tabla "rikishi"
+4. Editar Data/config.properties con sus credenciales:
+      db.url=jdbc:mysql://localhost:3306/sumo_db
+      db.usuario=root
+      db.contrasena=SU_CONTRASENA
+5. Agregar el JAR del driver MySQL al proyecto en NetBeans:
+   - Click derecho en el proyecto -> Properties -> Libraries
+   - Add JAR/Folder -> seleccionar lib/mysql-connector-java-5.1.46.jar
 
-LIBRERIA REQUERIDA:
-- mysql-connector-java-8.x.x.jar (incluida en lib/)
+ESTRUCTURA DE LA TABLA rikishi:
+---------------------------------
+id        INT AUTO_INCREMENT PRIMARY KEY
+nombre    VARCHAR(100) NOT NULL
+peso      DOUBLE NOT NULL
+victorias INT NOT NULL DEFAULT 0
+kimarites TEXT NOT NULL
+participo TINYINT(1) NOT NULL DEFAULT 0
+
+VERSIONES PROBADAS:
+--------------------
+- Java 8+
+- MySQL 5.x / XAMPP 3.x
+- Driver: mysql-connector-java-5.1.46.jar
+- NetBeans 12+ (proyecto Java Ant)
+================================================

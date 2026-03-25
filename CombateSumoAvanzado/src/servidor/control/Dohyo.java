@@ -1,111 +1,114 @@
 package servidor.control;
 
+import servidor.modelo.Rikishi;
+
+import java.util.List;
+import java.util.Random;
+
 /**
- * Clase que representa el estado del Dohyo (ring de sumo).
- * Solo almacena el estado del combate y provee sincronización
- * mediante {@code wait()} y {@code notifyAll()}.
- * Toda la lógica del combate reside en {@code ControlDohyo}.
+ * El Dohyo es el control del juego de sumo.
+ * Sincroniza los luchadores, gestiona los turnos, selecciona kimarites
+ * aleatoriamente, determina si un luchador es sacado del ring y
+ * obtiene el ganador. No es un modelo — ES la logica del juego.
+ * Usa wait/notifyAll para sincronizar los turnos entre hilos.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class Dohyo {
 
-    /** Primer luchador registrado en el dohyo. */
+    /** Primer luchador registrado. */
     private Rikishi rikishi1;
-
-    /** Segundo luchador registrado en el dohyo. */
+    /** Segundo luchador registrado. */
     private Rikishi rikishi2;
-
-    /** Número del turno actual (1 = rikishi1, 2 = rikishi2). */
+    /** Turno actual: 1 o 2. */
     private int turno;
-
-    /** Indica si el combate ha terminado. */
+    /** true si el combate termino. */
     private boolean combateTerminado;
-
-    /** Luchador ganador del combate. */
+    /** Ganador del combate. */
     private Rikishi ganador;
-
-    /** Nombre de la última técnica ejecutada (para mostrar en vista). */
+    /** Ultima kimarite ejecutada. */
     private String ultimaKimarite;
-
-    /** Nombre del luchador que ejecutó la última técnica. */
+    /** Nombre del ultimo atacante. */
     private String ultimoAtacante;
-
-    /** Contador de luchadores registrados en el dohyo. */
+    /** Cantidad de luchadores registrados. */
     private int rikishisListos;
+    /** Generador aleatorio para logica del combate. */
+    private Random random;
 
     /**
-     * Constructor que inicializa el Dohyo vacío.
+     * Constructor que inicializa el Dohyo vacio.
      */
     public Dohyo() {
-        this.turno           = 1;
+        this.turno            = 1;
         this.combateTerminado = false;
-        this.ganador         = null;
-        this.rikishisListos  = 0;
+        this.rikishisListos   = 0;
+        this.random           = new Random();
     }
 
     /**
-     * Registra un Rikishi en el dohyo.
-     * Cuando llegan los dos, asigna los rivales y notifica los hilos en espera.
+     * Registra un luchador en el Dohyo.
+     * Al llegar dos luchadores notifica a todos los hilos en espera.
      *
-     * @param rikishi Luchador que ingresa al dohyo.
+     * @param rikishi Luchador que ingresa al combate.
      */
     public synchronized void registrarRikishi(Rikishi rikishi) {
+        if (rikishi1 == null) rikishi1 = rikishi;
+        else                  rikishi2 = rikishi;
         rikishisListos++;
-        if (rikishisListos == 1) {
-            rikishi1 = rikishi;
-        } else {
-            rikishi2 = rikishi;
-            rikishi1.setRival(rikishi2);
-            rikishi2.setRival(rikishi1);
-            notifyAll();
-        }
+        if (rikishisListos == 2) notifyAll();
     }
 
     /**
-     * Bloquea al hilo que llama hasta que los dos luchadores estén registrados.
+     * Bloquea al hilo hasta que el rival este registrado.
      *
      * @throws InterruptedException Si el hilo es interrumpido.
      */
     public synchronized void esperarRival() throws InterruptedException {
-        while (rikishisListos < 2) {
-            wait();
-        }
+        while (rikishisListos < 2) wait();
     }
 
     /**
-     * Bloquea al hilo hasta que sea el turno del rikishi dado.
+     * Bloquea al luchador hasta que sea su turno.
      *
      * @param rikishi Luchador que espera su turno.
      * @throws InterruptedException Si el hilo es interrumpido.
      */
     public synchronized void esperarTurno(Rikishi rikishi) throws InterruptedException {
         int miTurno = (rikishi == rikishi1) ? 1 : 2;
-        while (turno != miTurno && !combateTerminado) {
-            wait(500);
-        }
+        while (!combateTerminado && turno != miTurno) wait();
     }
 
     /**
-     * Registra el resultado de un turno: la técnica usada y si el rival fue sacado.
-     * Luego alterna el turno y notifica a los hilos en espera.
+     * Ejecuta el turno del luchador: selecciona kimarite aleatoria,
+     * espera hasta 500ms y determina con 15% de probabilidad si saca al rival.
      *
-     * @param atacante      Rikishi que ejecutó la técnica.
-     * @param nombreKimarite Nombre de la técnica utilizada.
-     * @param sacaRival     {@code true} si el rival fue sacado del dohyo.
+     * @param atacante Rikishi que ejecuta su tecnica.
+     * @throws InterruptedException Si el hilo es interrumpido.
      */
-    public synchronized void registrarTurno(Rikishi atacante, String nombreKimarite, boolean sacaRival) {
-        this.ultimoAtacante = atacante.getNombre();
-        this.ultimaKimarite = nombreKimarite;
+    public synchronized void ejecutarTurno(Rikishi atacante) throws InterruptedException {
+        if (combateTerminado) return;
+
+        List<String> kimarites = atacante.getKimarites();
+        ultimaKimarite  = kimarites.get(random.nextInt(kimarites.size()));
+        ultimoAtacante  = atacante.getNombre();
+
+        // Espera aleatoria entre 100 y 500ms
+        long espera = 100 + random.nextInt(401);
+        wait(espera);
+
+        // 15% de probabilidad de sacar al rival
+        boolean sacaRival = random.nextInt(100) < 15;
 
         if (sacaRival) {
-            atacante.getRival().setEnDohyo(false);
+            Rikishi rival = (atacante == rikishi1) ? rikishi2 : rikishi1;
+            rival.setEnDohyo(false);
             ganador = atacante;
             ganador.incrementarVictorias();
             combateTerminado = true;
         }
 
+        // Cambiar turno
         turno = (turno == 1) ? 2 : 1;
         notifyAll();
     }
@@ -113,40 +116,40 @@ public class Dohyo {
     /**
      * Indica si el combate ha terminado.
      *
-     * @return {@code true} si hay ganador.
+     * @return true si hay ganador.
      */
-    public synchronized boolean isCombateTerminado() { return combateTerminado; }
+    public boolean isCombateTerminado() { return combateTerminado; }
 
     /**
-     * Obtiene el luchador ganador.
+     * Obtiene el ganador del combate.
      *
-     * @return Rikishi ganador o {@code null} si aún no hay.
+     * @return Rikishi ganador.
      */
-    public synchronized Rikishi getGanador() { return ganador; }
+    public Rikishi getGanador() { return ganador; }
 
     /**
-     * Obtiene el nombre de la última técnica ejecutada.
+     * Obtiene el nombre de la ultima kimarite ejecutada.
      *
-     * @return Nombre del último kimarite.
+     * @return Nombre del kimarite.
      */
-    public synchronized String getUltimaKimarite() { return ultimaKimarite; }
+    public String getUltimaKimarite() { return ultimaKimarite; }
 
     /**
-     * Obtiene el nombre del luchador que ejecutó la última técnica.
+     * Obtiene el nombre del ultimo atacante.
      *
-     * @return Nombre del último atacante.
+     * @return Nombre del atacante.
      */
-    public synchronized String getUltimoAtacante() { return ultimoAtacante; }
+    public String getUltimoAtacante() { return ultimoAtacante; }
 
     /**
-     * Obtiene el primer rikishi registrado.
+     * Obtiene el primer luchador registrado.
      *
      * @return Rikishi 1.
      */
     public Rikishi getRikishi1() { return rikishi1; }
 
     /**
-     * Obtiene el segundo rikishi registrado.
+     * Obtiene el segundo luchador registrado.
      *
      * @return Rikishi 2.
      */

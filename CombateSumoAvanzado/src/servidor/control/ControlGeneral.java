@@ -10,14 +10,14 @@ import java.util.List;
 
 /**
  * Controlador principal del servidor de sumo.
- * Es quien acepta conexiones con el ServerSocket y lanza un HiloRikishi
- * por cada cliente conectado. No delega esta responsabilidad a ningun hilo externo.
- * Al llegar al minimo de luchadores cierra el ServerSocket e inicia los combates.
+ * Implementa IInicioServidor para que ControlVista pueda comunicarse
+ * sin crear una dependencia ciclica directa.
+ * Acepta conexiones con el ServerSocket y lanza un HiloRikishi por cliente.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
-public class ControlGeneral {
+public class ControlGeneral implements ControlVista.IInicioServidor {
 
     /** Minimo de luchadores requeridos. */
     private static final int MIN_LUCHADORES = 6;
@@ -30,7 +30,7 @@ public class ControlGeneral {
     private ControlRAF controlRAF;
     /** Controlador de combates. */
     private ControlCombates controlCombates;
-    /** ServerSocket del servidor. */
+    /** ServerSocket activo. */
     private ServerSocket serverSocket;
     /** Hilos de luchadores registrados. */
     private List<HiloRikishi> hilosRegistrados;
@@ -41,6 +41,7 @@ public class ControlGeneral {
 
     /**
      * Inicia la aplicacion servidor creando el ControlVista.
+     * ControlVista recibe this como IInicioServidor — sin acoplamiento directo.
      */
     public void iniciar() {
         controlVista      = new ControlVista(this);
@@ -53,20 +54,25 @@ public class ControlGeneral {
     }
 
     /**
-     * Arranca el servidor: abre el ServerSocket y acepta clientes en un hilo
-     * de escucha dedicado. Por cada cliente aceptado lanza un HiloRikishi.
+     * Implementacion de IInicioServidor.
+     * Abre el ServerSocket y lanza el HiloEscucha.
      *
-     * @param puerto Puerto en el que escuchara el servidor.
+     * @param puerto Puerto a escuchar.
      */
+    @Override
     public void iniciarServidor(int puerto) {
-        controlCombates = new ControlCombates(controlBD, controlRAF, controlVista.getListener());
-        HiloEscucha hiloEscucha = new HiloEscucha(puerto);
-        hiloEscucha.start();
+        try {
+            controlCombates = new ControlCombates(controlBD, controlRAF, controlVista.getListener());
+            HiloEscucha hiloEscucha = new HiloEscucha(puerto);
+            hiloEscucha.start();
+        } catch (RuntimeException e) {
+            controlVista.mostrarMensaje("Error al iniciar servidor: " + e.getMessage());
+        }
     }
 
     /**
-     * Llamado por cada HiloRikishi cuando registra su luchador.
-     * Al llegar al minimo cierra el ServerSocket e inicia combates.
+     * Llamado por cada HiloRikishi al registrar su luchador.
+     * Al llegar al minimo inicia los combates.
      *
      * @param hilo HiloRikishi del luchador registrado.
      */
@@ -87,7 +93,7 @@ public class ControlGeneral {
     }
 
     /**
-     * Cierra el ServerSocket para no aceptar mas conexiones.
+     * Cierra el ServerSocket.
      */
     private void cerrarServerSocket() {
         try {
@@ -95,12 +101,12 @@ public class ControlGeneral {
                 serverSocket.close();
             }
         } catch (IOException e) {
-            System.err.println("Error cerrando ServerSocket: " + e.getMessage());
+            controlVista.mostrarMensaje("Error cerrando servidor: " + e.getMessage());
         }
     }
 
     /**
-     * Ejecuta los tres combates en un hilo separado para no bloquear.
+     * Ejecuta los combates en un hilo separado.
      */
     private void iniciarCombatesEnHilo() {
         controlVista.mostrarMensaje("6 luchadores registrados. Iniciando combates...");
@@ -121,13 +127,15 @@ public class ControlGeneral {
                     controlVista.mostrarMensaje("Fin. Resultados en consola.");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                } catch (RuntimeException e) {
+                    controlVista.mostrarMensaje("Error en combates: " + e.getMessage());
                 }
             }
         }).start();
     }
 
     /**
-     * Notifica el resultado a cada HiloRikishi segun victorias en BD.
+     * Notifica el resultado a cada cliente.
      */
     private void notificarResultadosAClientes() {
         List<Rikishi> todos = controlBD.obtenerTodos();
@@ -143,9 +151,7 @@ public class ControlGeneral {
     // ======================== HILO DE ESCUCHA ========================
 
     /**
-     * Hilo que abre el ServerSocket y acepta conexiones entrantes.
-     * Por cada cliente aceptado lanza un HiloRikishi para atenderlo.
-     * Este es el UNICO punto donde el servidor acepta clientes.
+     * Hilo que acepta conexiones entrantes y lanza un HiloRikishi por cliente.
      */
     private class HiloEscucha extends Thread {
 
@@ -153,7 +159,7 @@ public class ControlGeneral {
         private int puerto;
 
         /**
-         * Constructor del hilo de escucha.
+         * Constructor.
          *
          * @param puerto Puerto a escuchar.
          */
@@ -162,8 +168,7 @@ public class ControlGeneral {
         }
 
         /**
-         * Abre el ServerSocket y lanza un HiloRikishi por cada cliente conectado.
-         * Se detiene cuando el ServerSocket es cerrado por ControlGeneral.
+         * Abre el ServerSocket, acepta clientes y lanza HiloRikishi por cada uno.
          */
         @Override
         public void run() {
@@ -182,7 +187,7 @@ public class ControlGeneral {
                 }
             } catch (IOException e) {
                 if (!e.getMessage().contains("closed")) {
-                    System.err.println("Error servidor: " + e.getMessage());
+                    controlVista.mostrarMensaje("Error servidor: " + e.getMessage());
                 }
             }
         }

@@ -8,6 +8,8 @@ import java.util.List;
 /**
  * Implementacion concreta del DAO para Rikishi.
  * Encapsula todas las operaciones SQL sobre la tabla rikishi.
+ * Los errores se propagan como excepciones — no se imprime nada en consola.
+ * El control es quien decide como mostrar los errores (por la vista).
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
@@ -16,6 +18,7 @@ public class RikishiDAO implements IRikishiDAO {
 
     /**
      * Retorna la conexion activa del Singleton.
+     *
      * @return Connection activo.
      */
     private Connection getConexion() {
@@ -24,24 +27,19 @@ public class RikishiDAO implements IRikishiDAO {
 
     /** {@inheritDoc} */
     @Override
-    public boolean insertar(Rikishi rikishi) {
-        String sql = "INSERT INTO rikishi (nombre, peso, victorias, kimarites, participo) VALUES (?,?,?,?,?)";
+    public boolean insertar(String nombre, double peso, int victorias,
+                             String kimarites, boolean participo) {
+        String sql = "INSERT INTO rikishi (nombre, peso, victorias, kimarites, participo) " +
+                     "VALUES (?,?,?,?,?)";
         try (PreparedStatement ps = getConexion().prepareStatement(sql)) {
-            ps.setString(1, rikishi.getNombre());
-            ps.setDouble(2, rikishi.getPeso());
-            ps.setInt(3, rikishi.getVictorias());
-            ps.setString(4, String.join(",", rikishi.getKimarites()));
-            ps.setBoolean(5, rikishi.isParticipo());
-            int rows = ps.executeUpdate();
-            return rows > 0;
-        } catch (Exception e) {
-            System.err.println("RikishiDAO.insertar ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            if (e instanceof java.sql.SQLException) {
-                java.sql.SQLException sqle = (java.sql.SQLException) e;
-                System.err.println("SQLState: " + sqle.getSQLState() + " | ErrorCode: " + sqle.getErrorCode());
-            }
-            e.printStackTrace();
-            return false;
+            ps.setString(1, nombre);
+            ps.setDouble(2, peso);
+            ps.setInt(3, victorias);
+            ps.setString(4, kimarites);
+            ps.setBoolean(5, participo);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error al insertar luchador: " + e.getMessage());
         }
     }
 
@@ -54,7 +52,7 @@ public class RikishiDAO implements IRikishiDAO {
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) lista.add(mapear(rs));
         } catch (SQLException e) {
-            System.err.println("Error consultarTodos: " + e.getMessage());
+            throw new RuntimeException("Error al consultar luchadores: " + e.getMessage());
         }
         return lista;
     }
@@ -68,7 +66,7 @@ public class RikishiDAO implements IRikishiDAO {
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) lista.add(mapear(rs));
         } catch (SQLException e) {
-            System.err.println("Error consultarDisponibles: " + e.getMessage());
+            throw new RuntimeException("Error al consultar disponibles: " + e.getMessage());
         }
         return lista;
     }
@@ -82,8 +80,7 @@ public class RikishiDAO implements IRikishiDAO {
             ps.setInt(2, id);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            System.err.println("Error actualizarVictorias: " + e.getMessage());
-            return false;
+            throw new RuntimeException("Error al actualizar victorias: " + e.getMessage());
         }
     }
 
@@ -95,8 +92,7 @@ public class RikishiDAO implements IRikishiDAO {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            System.err.println("Error marcarParticipacion: " + e.getMessage());
-            return false;
+            throw new RuntimeException("Error al marcar participacion: " + e.getMessage());
         }
     }
 
@@ -108,7 +104,7 @@ public class RikishiDAO implements IRikishiDAO {
              ResultSet rs = st.executeQuery(sql)) {
             if (rs.next()) return rs.getInt(1);
         } catch (SQLException e) {
-            System.err.println("Error contarLuchadores: " + e.getMessage());
+            throw new RuntimeException("Error al contar luchadores: " + e.getMessage());
         }
         return 0;
     }
@@ -122,15 +118,16 @@ public class RikishiDAO implements IRikishiDAO {
             ResultSet rs = ps.executeQuery();
             if (rs.next()) return mapear(rs);
         } catch (SQLException e) {
-            System.err.println("Error consultarPorId: " + e.getMessage());
+            throw new RuntimeException("Error al consultar por id: " + e.getMessage());
         }
         return null;
     }
 
     /**
-     * Mapea una fila del ResultSet a un Rikishi.
+     * Mapea una fila del ResultSet a un objeto Rikishi.
+     *
      * @param rs ResultSet posicionado en la fila.
-     * @return Objeto Rikishi.
+     * @return Objeto Rikishi mapeado.
      * @throws SQLException Si ocurre error al leer.
      */
     private Rikishi mapear(ResultSet rs) throws SQLException {

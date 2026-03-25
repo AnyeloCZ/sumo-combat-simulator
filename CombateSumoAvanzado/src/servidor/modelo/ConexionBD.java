@@ -77,7 +77,7 @@ public class ConexionBD {
     public Connection getConexion() {
         try {
             if (conexion == null || conexion.isClosed()) {
-                System.out.println("ConexionBD: reconectando a BD...");
+                // reconexion automatica
                 conexion = DriverManager.getConnection(url, usuario, contrasena);
             }
         } catch (SQLException e) {

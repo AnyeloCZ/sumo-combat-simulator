@@ -7,26 +7,44 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 /**
- * Controlador de vista del servidor del parcial.
+ * Controlador de vista del servidor de sumo.
  * Crea su propia VentanaServidor internamente.
  * Implementa ActionListener e IEventosCombate directamente.
+ * NO conoce a ControlGeneral — se comunica con el mediante una interfaz
+ * para evitar dependencias ciclicas.
  *
  * @author Sebastian Zambrano - 20251020102, Anyelo Casas - 20251020106, Diego Yañes - 20251020103
  * @version 1.0
  */
 public class ControlVista implements ActionListener, IEventosCombate {
 
-    /** Ventana del servidor. */
+    /** Ventana del servidor creada internamente. */
     private VentanaServidor ventana;
-    /** Controlador general. */
-    private ControlGeneral controlGeneral;
+
+    /** Listener para delegar el inicio del servidor al ControlGeneral sin acoplamiento directo. */
+    private IInicioServidor inicioServidor;
 
     /**
-     * Constructor que crea la ventana y registra listeners.
-     * @param controlGeneral Controlador principal.
+     * Interface funcional que permite a ControlVista notificar el inicio
+     * sin conocer directamente a ControlGeneral.
+     * Rompe la dependencia ciclica ControlGeneral <-> ControlVista.
      */
-    public ControlVista(ControlGeneral controlGeneral) {
-        this.controlGeneral = controlGeneral;
+    public interface IInicioServidor {
+        /**
+         * Inicia el servidor en el puerto indicado.
+         *
+         * @param puerto Puerto a escuchar.
+         */
+        void iniciarServidor(int puerto);
+    }
+
+    /**
+     * Constructor que recibe el listener de inicio, crea la ventana y registra listeners.
+     *
+     * @param inicioServidor Implementacion que inicia el servidor (ControlGeneral).
+     */
+    public ControlVista(IInicioServidor inicioServidor) {
+        this.inicioServidor = inicioServidor;
         this.ventana        = new VentanaServidor();
         registrarListeners();
     }
@@ -47,7 +65,8 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
-     * Despacha eventos segun la fuente del boton.
+     * Despacha eventos segun el boton presionado.
+     *
      * @param e Evento de accion.
      */
     @Override
@@ -61,17 +80,19 @@ public class ControlVista implements ActionListener, IEventosCombate {
 
     /**
      * Inicia el servidor con el puerto ingresado.
+     *
      * @param e Evento de accion.
      */
     private void performedIniciar(ActionEvent e) {
         int puerto = validarPuerto();
         if (puerto == -1) return;
         ventana.getBtnIniciar().setEnabled(false);
-        controlGeneral.iniciarServidor(puerto);
+        inicioServidor.iniciarServidor(puerto);
     }
 
     /**
      * Limpia el log del servidor.
+     *
      * @param e Evento de accion.
      */
     private void performedLimpiar(ActionEvent e) {
@@ -80,6 +101,7 @@ public class ControlVista implements ActionListener, IEventosCombate {
 
     /**
      * Valida el puerto ingresado por el usuario.
+     *
      * @return Puerto valido o -1 si es invalido.
      */
     private int validarPuerto() {
@@ -88,10 +110,12 @@ public class ControlVista implements ActionListener, IEventosCombate {
             if (p <= 0 || p > 65535) throw new NumberFormatException();
             return p;
         } catch (NumberFormatException ex) {
-            ventana.agregarLog("Puerto invalido. Debe ser un numero entre 1 y 65535.");
+            ventana.agregarLog("Puerto invalido. Debe ser entre 1 y 65535.");
             return -1;
         }
     }
+
+    // ======================== IEventosCombate ========================
 
     /** {@inheritDoc} */
     @Override
@@ -134,7 +158,8 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
-     * Muestra un mensaje en el log.
+     * Muestra un mensaje en el log. Tambien maneja RuntimeException mostrando por vista.
+     *
      * @param mensaje Texto a mostrar.
      */
     public void mostrarMensaje(String mensaje) {
@@ -144,20 +169,20 @@ public class ControlVista implements ActionListener, IEventosCombate {
     }
 
     /**
-     * Actualiza el contador de luchadores registrados en la vista.
+     * Actualiza el contador de luchadores registrados.
      *
-     * @param registrados Cantidad actual de registrados.
+     * @param registrados Cantidad registrada.
      * @param minimo      Minimo requerido.
      */
     public void actualizarContador(int registrados, int minimo) {
         SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() { ventana.actualizarContador(registrados, minimo); }
+            @Override public void run() { ventana.actualizarContador(registrados, minimo); }
         });
     }
 
     /**
-     * Retorna este controlador como listener de eventos.
+     * Retorna este controlador como listener de eventos del combate.
+     *
      * @return Esta instancia.
      */
     public IEventosCombate getListener() { return this; }
